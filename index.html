@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>🐼 パンダロイヤル – 10 Rounds</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #f7f8fa;
+        --card: #ffffff;
+        --accent: #24b39c;
+        --accent-d: #1b8976;
+        --border: #e0e0e0;
+        --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+
+        --yellow: #ffe066;
+        --purple: #c1a5ff;
+        --red: #ff8d8d;
+        --green: #87e293;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Poppins", sans-serif;
+        background: var(--bg);
+        color: #333;
+      }
+      header {
+        background: var(--accent);
+        color: #fff;
+        text-align: center;
+        padding: 1rem 2rem;
+        box-shadow: var(--shadow);
+      }
+      .container {
+        max-width: 960px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: var(--shadow);
+        margin-bottom: 2rem;
+      }
+
+      /* buttons */
+      .btn {
+        width: 100%;
+        border: none;
+        border-radius: 10px;
+        padding: 0.7rem 1rem;
+        font-size: 1rem;
+        font-weight: 600;
+        color: #fff;
+        background: var(--accent);
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .btn:hover:not(:disabled) {
+        background: var(--accent-d);
+      }
+      .btn:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      /* offer buttons */
+      #offers {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .offer-btn {
+        flex: 1 1 140px;
+        padding: 0.7rem 1rem;
+        font-weight: 600;
+        border: none;
+        border-radius: 12px;
+        color: #333;
+        box-shadow: var(--shadow);
+        cursor: pointer;
+        transition: transform 0.15s, filter 0.15s;
+      }
+      .offer-btn:hover:not(:disabled) {
+        transform: translateY(-4px);
+        filter: brightness(1.05);
+      }
+      .offer-btn:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      .offer-yellow {
+        background: var(--yellow);
+      }
+      .offer-purple {
+        background: var(--purple);
+      }
+      .offer-red {
+        background: var(--red);
+      }
+      .offer-green {
+        background: var(--green);
+      }
+
+      /* table */
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        border: 1px solid var(--border);
+        padding: 0.4rem 0.3rem;
+        text-align: center;
+      }
+      th {
+        background: #fafafa;
+      }
+      tbody tr:nth-child(odd) {
+        background: #fdfdfd;
+      }
+      tbody tr:nth-child(even) {
+        background: #f7f7f7;
+      }
+
+      @media (max-width: 600px) {
+        table thead {
+          font-size: 0.8rem;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <header><h1>🐼 パンダロイヤル – 10 Rounds</h1></header>
+
+    <div class="container">
+      <!-- Controls -->
+      <div
+        class="card"
+        style="
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+          align-items: center;
+        "
+      >
+        <h2
+          id="winner"
+          style="display: none; color: var(--accent); margin: 0"
+        ></h2>
+        <button id="startBtn" class="btn">ゲーム開始</button>
+        <button id="rollBtn" class="btn">ダイスを振る！</button>
+        <button id="rematchBtn" class="btn" style="display: none">
+          再戦！
+        </button>
+
+        <p id="waiting" style="margin: 0; font-weight: 600"></p>
+        <p id="info" style="margin: 0; font-size: 1.1rem"></p>
+      </div>
+
+      <!-- Offers (獲得できるダイス) -->
+      <div id="offersCard" class="card">
+        <h3 style="margin-top: 0">🎁 獲得できるダイス</h3>
+        <div id="offers"></div>
+      </div>
+
+      <!-- Scoreboard + Dice Result -->
+      <div class="card">
+        <h3 style="margin-top: 0">📊 スコアボード</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>プレイヤー</th>
+              <th>1</th>
+              <th>2</th>
+              <th>3</th>
+              <th>4</th>
+              <th>5</th>
+              <th>6</th>
+              <th>7</th>
+              <th>8</th>
+              <th>9</th>
+              <th>10</th>
+              <th>手持ち<br /><small>黄/紫/赤/緑/青/桃/金</small></th>
+            </tr>
+          </thead>
+          <tbody id="scoreBody"></tbody>
+        </table>
+
+        <!-- Dice result -->
+        <div id="detail" style="margin-top: 1.5rem">
+          <h3 style="margin-top: 0">🎲 ダイス結果</h3>
+          <p>—</p>
+        </div>
+      </div>
+
+      <!-- Dice Effects -->
+      <div class="card">
+        <h3 style="margin-top: 0">📝 ダイス効果</h3>
+        <div id="diceHelp"></div>
+      </div>
+
+      <!-- Reset -->
+      <div style="text-align: center; margin: 2rem 0">
+        <button id="resetBtn" class="btn" style="max-width: 300px">
+          ゲームリセット
+        </button>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
