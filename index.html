@@ -21,8 +21,10 @@
         --purple: #c1a5ff;
         --red: #ff8d8d;
         --green: #87e293;
+        --blue: #74c0fc;
+        --pink: #ff99c8;
+        --gold: #ffd700;
       }
-
       * {
         box-sizing: border-box;
       }
@@ -74,6 +76,25 @@
         cursor: not-allowed;
       }
 
+      /* sparkle animation */
+      @keyframes sparkle {
+        0% {
+          box-shadow: 0 0 8px 4px rgba(255, 215, 0, 0.9);
+        }
+        25% {
+          box-shadow: 0 0 16px 8px rgba(255, 235, 150, 0.8);
+        }
+        50% {
+          box-shadow: 0 0 24px 12px rgba(255, 245, 200, 0.6);
+        }
+        75% {
+          box-shadow: 0 0 16px 8px rgba(255, 235, 150, 0.8);
+        }
+        100% {
+          box-shadow: 0 0 8px 4px rgba(255, 215, 0, 0.9);
+        }
+      }
+
       /* offer buttons */
       #offers {
         display: flex;
@@ -83,6 +104,7 @@
       }
       .offer-btn {
         flex: 1 1 140px;
+        min-width: 140px;
         padding: 0.7rem 1rem;
         font-weight: 600;
         border: none;
@@ -112,6 +134,35 @@
       .offer-green {
         background: var(--green);
       }
+      .offer-blue {
+        background: var(--blue);
+      }
+      .offer-pink {
+        background: var(--pink);
+      }
+      .offer-gold {
+        background: var(--gold);
+        position: relative;
+        animation: sparkle 0.8s infinite alternate ease-in-out;
+      }
+
+      /* star elements */
+      .star {
+        position: absolute;
+        font-size: 1.2em;
+        color: #fff;
+        animation: star 1.5s infinite ease-in-out;
+        pointer-events: none;
+      }
+      @keyframes star {
+        0%,
+        100% {
+          opacity: 0;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
 
       /* table */
       table {
@@ -133,7 +184,6 @@
       tbody tr:nth-child(even) {
         background: #f7f7f7;
       }
-
       @media (max-width: 600px) {
         table thead {
           font-size: 0.8rem;
@@ -141,10 +191,8 @@
       }
     </style>
   </head>
-
   <body>
     <header><h1>🐼 パンダロイヤル – 10 Rounds</h1></header>
-
     <div class="container">
       <!-- Controls -->
       <div
@@ -165,12 +213,11 @@
         <button id="rematchBtn" class="btn" style="display: none">
           再戦！
         </button>
-
         <p id="waiting" style="margin: 0; font-weight: 600"></p>
         <p id="info" style="margin: 0; font-size: 1.1rem"></p>
       </div>
 
-      <!-- Offers (獲得できるダイス) -->
+      <!-- Offers -->
       <div id="offersCard" class="card">
         <h3 style="margin-top: 0">🎁 獲得できるダイス</h3>
         <div id="offers"></div>
@@ -198,8 +245,6 @@
           </thead>
           <tbody id="scoreBody"></tbody>
         </table>
-
-        <!-- Dice result -->
         <div id="detail" style="margin-top: 1.5rem">
           <h3 style="margin-top: 0">🎲 ダイス結果</h3>
           <p>—</p>
@@ -212,6 +257,12 @@
         <div id="diceHelp"></div>
       </div>
 
+      <!-- Event List -->
+      <div class="card">
+        <h3 style="margin-top: 0">🔍 イベント一覧</h3>
+        <ul id="eventList" style="margin: 0 1rem"></ul>
+      </div>
+
       <!-- Reset -->
       <div style="text-align: center; margin: 2rem 0">
         <button id="resetBtn" class="btn" style="max-width: 300px">
@@ -219,7 +270,6 @@
         </button>
       </div>
     </div>
-
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

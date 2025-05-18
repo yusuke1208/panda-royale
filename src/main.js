@@ -3,14 +3,43 @@ const socket = io();
 
 /* ---------- 定義 ---------- */
 const LABEL = {
-  yellow: { name: "黄色（6面）", hex: "#ffd43b" },
-  purple: { name: "紫色（2倍）", hex: "#b197fc" },
-  red: { name: "赤色（リスキー）", hex: "#ff6b6b" },
-  green: { name: "緑色（20面）", hex: "#8ce99a" },
-  blue: { name: "青色（奇数9以下）", hex: "#74c0fc" },
-  pink: { name: "桃色（偶数10以下）", hex: "#ff99c8" },
-  gold: { name: "金色（20固定）", hex: "#ffd700" },
+  yellow: { name: "黄色（6面）", effect: "出目の合計が得点", hex: "#ffd43b" },
+  purple: {
+    name: "紫色（2倍）",
+    effect: "出目の合計 ×2倍 が得点",
+    hex: "#b197fc",
+  },
+  red: {
+    name: "赤色（リスキー）",
+    effect: "1/3 でマイナス。±合計 ×個数 が得点",
+    hex: "#ff6b6b",
+  },
+  green: { name: "緑色（20面）", effect: "出目の合計が得点", hex: "#8ce99a" },
+  blue: {
+    name: "青色（奇数9以下）",
+    effect: "1,3,5,7,9 のみ出る",
+    hex: "#74c0fc",
+  },
+  pink: {
+    name: "桃色（偶数10以下）",
+    effect: "2,4,6,8,10 のみ出る",
+    hex: "#ff99c8",
+  },
+  gold: {
+    name: "金色（20固定）",
+    effect: "常に 20、入手確率 3 %",
+    hex: "#ffd700",
+  },
 };
+
+/* ---------- イベント一覧 (クライアント用) ---------- */
+const EVENTS = [
+  { name: "オッドブースト", desc: "奇数出目が 2 倍！" },
+  { name: "イーブンブレイク", desc: "偶数出目が 半分！" },
+  { name: "カラーフォーカス", desc: "選ばれた色のダイス効果が 2 倍！" },
+  { name: "パンダフィーバー", desc: "全ダイス +2 (上限まで)" },
+  { name: "ギャンブルタイム", desc: "赤ダイスのマイナス確率 75 %！" },
+];
 
 /* ---------- DOM ---------- */
 const $ = (id) => document.getElementById(id);
@@ -27,6 +56,8 @@ const infoP = $("info");
 const detailDiv = $("detail");
 const tbody = $("scoreBody");
 const helpDiv = $("diceHelp");
+const eventList = $("eventList");
+
 let banner = $("eventBanner");
 if (!banner) {
   banner = document.createElement("p");
@@ -44,15 +75,7 @@ if (!banner) {
   infoP.after(banner);
 }
 
-/* ---------- 効果説明 ---------- */
-helpDiv.innerHTML = Object.values(LABEL)
-  .map((d) => `<p><b>${d.name}：</b></p>`)
-  .join("");
-
-/* ---------- 状態 ---------- */
-let currentRound = 0;
-
-/* ---------- 初期可視 ---------- */
+/* ---------- 初期表示 ---------- */
 rollBtn.style.display = "none";
 rematchBtn.style.display = "none";
 offersCard.style.display = "none";
@@ -62,6 +85,16 @@ winnerH2.style.display = "none";
 const myName = prompt("名前を入力してください")?.trim() || "名無し";
 socket.emit("setName", myName);
 
+/* ---------- ダイス効果表示 ---------- */
+helpDiv.innerHTML = Object.values(LABEL)
+  .map((d) => `<p><b>${d.name}：</b>${d.effect}</p>`)
+  .join("");
+
+/* ---------- イベント一覧表示 ---------- */
+eventList.innerHTML = EVENTS.map(
+  (e) => `<li><b>${e.name}：</b>${e.desc}</li>`
+).join("");
+
 /* ---------- ボタンハンドラ ---------- */
 startBtn.onclick = () => {
   socket.emit("startGame");
@@ -69,7 +102,6 @@ startBtn.onclick = () => {
   rollBtn.style.display = "inline-block";
   rollBtn.disabled = false;
 };
-
 rollBtn.onclick = () => socket.emit("roll");
 resetBtn.onclick = () => socket.emit("resetGame");
 rematchBtn.onclick = () => {
@@ -79,12 +111,10 @@ rematchBtn.onclick = () => {
 
 /* ---------- サーバーイベント ---------- */
 socket.on("resetDone", () => {
-  currentRound = 0;
   startBtn.disabled = false;
   rollBtn.style.display = "none";
   rematchBtn.style.display = "none";
   offersCard.style.display = "none";
-  offersDiv.innerHTML = "";
   banner.style.display = "none";
   winnerH2.style.display = "none";
   detailDiv.innerHTML = "<h3>🎲 ダイス結果</h3><p>—</p>";
@@ -106,11 +136,27 @@ socket.on("offers", (list) => {
   offersCard.style.display = "block";
   offersDiv.innerHTML = "";
   rollBtn.disabled = true;
+
   list.forEach((t) => {
     const b = document.createElement("button");
     b.textContent = LABEL[t].name;
     b.classList.add("offer-btn", `offer-${t}`);
     b.style.background = LABEL[t].hex;
+
+    // ゴールドダイスは複数星をランダム配置
+    if (t === "gold") {
+      b.style.position = "relative";
+      for (let i = 0; i < 6; i++) {
+        const star = document.createElement("span");
+        star.classList.add("star");
+        star.textContent = "✦";
+        star.style.left = `${Math.random() * 80 + 10}%`;
+        star.style.top = `${Math.random() * 80 + 10}%`;
+        star.style.animationDelay = `${Math.random() * 1.5}s`;
+        b.appendChild(star);
+      }
+    }
+
     b.onclick = () => {
       socket.emit("pick", t);
       offersDiv.textContent = `(${LABEL[t].name} を取得)`;
@@ -121,27 +167,17 @@ socket.on("offers", (list) => {
 });
 
 socket.on("rolledMe", ({ round, turnScore, perType }) => {
-  currentRound = round;
-  infoP.textContent = `ラウンド ${round}：+${turnScore}点`;
   rollBtn.disabled = true;
+  infoP.textContent = `ラウンド ${round}：+${turnScore}点`;
 
-  // 直接 formula を信頼して HTML 表示
   detailDiv.innerHTML =
     "<h3>🎲 ダイス結果</h3>" +
     Object.entries(perType)
-      .map(
-        ([t, o]) => `
-        <p>
-          <b>${LABEL[t].name}：</b>
-          ${o.formula}
-        </p>
-      `
-      )
+      .map(([t, o]) => `<p><b>${LABEL[t].name}：</b>${o.formula}</p>`)
       .join("");
 });
 
 socket.on("roundEnd", ({ players, currentRound: rd }) => {
-  currentRound = rd + 1;
   infoP.textContent = `ラウンド ${rd} 終了！`;
   rollBtn.disabled = true;
   draw(players);
@@ -154,10 +190,10 @@ socket.on("gameEnd", ({ players, winners }) => {
       ? `同点優勝: ${winners.join(" / ")}`
       : `優勝: ${winners[0]}`;
   winnerH2.style.display = "block";
-  infoP.textContent = "ゲーム終了！「再戦！」で新ゲームを開始できます。";
   rollBtn.style.display = "none";
   offersCard.style.display = "none";
   rematchBtn.style.display = "inline-block";
+  infoP.textContent = "ゲーム終了！「再戦！」で新ゲームを開始できます。";
 });
 
 /* ---------- 描画ヘルパー ---------- */
@@ -173,10 +209,7 @@ function draw(players) {
     tr.innerHTML =
       `<th>${p.name}</th>` +
       p.history.map((s) => `<td>${s}</td>`).join("") +
-      `<td>
-        黄:${p.dice.yellow}  紫:${p.dice.purple}  赤:${p.dice.red}  緑:${p.dice.green}
-        青:${p.dice.blue}  桃:${p.dice.pink}  金:${p.dice.gold}
-      </td>`;
+      `<td>黄:${p.dice.yellow} 紫:${p.dice.purple} 赤:${p.dice.red} 緑:${p.dice.green} 青:${p.dice.blue} 桃:${p.dice.pink} 金:${p.dice.gold}</td>`;
     tbody.appendChild(tr);
   });
 }

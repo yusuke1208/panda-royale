@@ -1,12 +1,14 @@
-/*───────── 依存 ────────*/
+const os = require("os");
 const path = require("path");
 const express = require("express");
 const { createServer } = require("http");
 const { Server } = require("socket.io");
 const { roll } = require("./util/dice.js");
 
-/*───────── 定数 ────────*/
+// 最大ラウンド数
 const MAX_ROUNDS = 10;
+
+// ダイス色ラベル＆色コード
 const COL_LABEL = {
   yellow: "黄色",
   purple: "紫色",
@@ -26,10 +28,7 @@ const COL_HEX = {
   gold: "#ffd700",
 };
 
-/* 新ダイスはイベント colourFocus の対象にも含める */
-const COLOUR_KEYS = Object.keys(COL_LABEL);
-
-/* イベント一覧 */
+// ランダムイベント定義
 const EVENTS = [
   {
     key: "oddBoost",
@@ -64,25 +63,39 @@ const EVENTS = [
   },
 ];
 
-/*───────── 初期化 ────────*/
+// Express + Socket.IO 初期化
 const app = express();
 const http = createServer(app);
 const io = new Server(http);
 app.use(express.static(path.join(__dirname, "../dist")));
 
-/*───────── 状態 ────────*/
-let currentRound = 0,
-  readyCnt = 0,
-  gameStarted = false,
-  currentEvent = null;
+// ゲーム状態
+let currentRound = 0;
+let readyCnt = 0;
+let gameStarted = false;
+let currentEvent = null;
 const players = {};
 
-/*───────── util ────────*/
+// ネットワークインターフェイスからローカルIPを取得
+function getLocalExternalIp() {
+  const nets = os.networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === "IPv4" && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return "localhost";
+}
+
+// ラウンドイベント抽選 (1/2)
 function chooseEvent() {
-  if (Math.random() >= 0.5) return null; // 1/2
+  if (Math.random() >= 0.5) return null;
   const base = EVENTS[Math.floor(Math.random() * EVENTS.length)];
   if (!base.pickColor) return { ...base };
-  const col = COLOUR_KEYS[Math.floor(Math.random() * COLOUR_KEYS.length)];
+  const keys = Object.keys(COL_LABEL);
+  const col = keys[Math.floor(Math.random() * keys.length)];
   return {
     ...base,
     colour: col,
@@ -90,15 +103,58 @@ function chooseEvent() {
     color: base.colorFrom(col),
   };
 }
-const topIds = (idx) => {
-  const max = Math.max(...Object.values(players).map((p) => p.history[idx]));
-  return Object.entries(players)
-    .filter(([_, p]) => p.history[idx] === max)
-    .map(([id]) => id);
-};
-const wrapHL = (v) => `<b style="color:#d32f2f;">${v}</b>`;
 
-/*───────── ソケット ────────*/
+// ラウンド最上位ID取得
+function topIds(idx) {
+  const arr = Object.entries(players).map(([id, p]) => ({
+    id,
+    sc: p.history[idx],
+  }));
+  const max = Math.max(...arr.map((o) => o.sc));
+  return arr.filter((o) => o.sc === max).map((o) => o.id);
+}
+
+// 新ラウンド／オファー送信
+function sendOffers(topIdsList) {
+  const pool = ["yellow", "purple", "red", "green", "blue", "pink"];
+  function randomDie() {
+    return Math.random() < 0.03
+      ? "gold"
+      : pool[Math.floor(Math.random() * pool.length)];
+  }
+  const list3 = [randomDie(), randomDie(), randomDie()];
+  for (const id in players) {
+    const sock = io.sockets.sockets.get(id);
+    if (!sock) continue;
+    const offers = topIdsList.includes(id)
+      ? [list3[Math.floor(Math.random() * 3)]]
+      : list3;
+    sock.emit("offers", offers);
+  }
+}
+
+// ロビーリセット
+function toLobby() {
+  gameStarted = false;
+  currentRound = 0;
+  readyCnt = 0;
+  currentEvent = null;
+  for (const p of Object.values(players)) {
+    p.dice = {
+      yellow: 1,
+      purple: 0,
+      red: 0,
+      green: 0,
+      blue: 0,
+      pink: 0,
+      gold: 0,
+    };
+    p.history = Array(MAX_ROUNDS).fill("-");
+    p.rolled = p.picked = false;
+  }
+}
+
+// Socket.IO ハンドラ
 io.on("connection", (sock) => {
   sock.on("setName", (name) => {
     if (gameStarted) {
@@ -151,20 +207,22 @@ io.on("connection", (sock) => {
     const p = players[sock.id];
     if (!gameStarted || !p || p.rolled || (currentRound > 1 && !p.picked))
       return;
+
     p.rolled = true;
     readyCnt++;
-    let turn = 0;
-    const per = {};
-    const ev = currentEvent,
-      odd = ev && ev.key === "oddBoost",
-      even = ev && ev.key === "evenBreak";
-    const fever = ev && ev.key === "fever",
-      gamble = ev && ev.key === "gambleTime";
-    const col2x = ev && ev.key === "colourFocus" ? ev.colour : null;
+    let turnScore = 0;
+    const perType = {};
+    const ev = currentEvent;
+    const odd = ev && ev.key === "oddBoost";
+    const even = ev && ev.key === "evenBreak";
+    const fever = ev && ev.key === "fever";
+    const gamble = ev && ev.key === "gambleTime";
+    const c2x = ev && ev.key === "colourFocus" ? ev.colour : null;
 
-    const adjust = (v, max) => {
-      let imp = false,
-        orig = v;
+    // 調整関数
+    function adjust(v, max) {
+      let imp = false;
+      let orig = v;
       if (fever) {
         v = Math.min(v + 2, max);
         if (v !== orig) imp = true;
@@ -179,114 +237,112 @@ io.on("connection", (sock) => {
         imp = true;
       }
       return { v, imp };
-    };
-    const addLine = (k, f, pts) => {
-      per[k] = { formula: f };
-      turn += pts;
-    };
+    }
+    function wrapHL(x) {
+      return `<b style=\"color:#d32f2f;\">${x}</b>`;
+    }
+    function addLine(key, formula, pts) {
+      perType[key] = { formula };
+      turnScore += pts;
+    }
 
-    /* 汎用ロール */
-    const simpleDie = (key, max) => {
-      const raws = Array.from({ length: p.dice[key] }, () => roll(key));
-      if (!raws.length) return;
-      const adj = raws.map((x) => adjust(x, max));
+    // 各色ダイス処理
+    [
+      ["yellow", 6],
+      ["green", 20],
+      ["blue", 9],
+      ["pink", 10],
+    ].forEach(([t, m]) => {
+      const arr = Array.from({ length: p.dice[t] }, () => roll(t));
+      if (!arr.length) return;
+      const adj = arr.map((x) => adjust(x, m));
       let pts = adj.reduce((a, b) => a + b.v, 0);
-      if (col2x === key) pts *= 2;
+      if (c2x === t) pts *= 2;
       const vals = adj.map((o) => (o.imp ? wrapHL(o.v) : o.v));
       addLine(
-        key,
-        `${vals.join(" + ")} = ${col2x === key ? wrapHL(pts) : pts}点`,
+        t,
+        `${vals.join(" + ")} = ${c2x === t ? wrapHL(pts) : pts}点`,
         pts
       );
-    };
-    simpleDie("yellow", 6);
-    simpleDie("green", 20);
-    simpleDie("blue", 9);
-    simpleDie("pink", 10);
-
-    /* purple */
+    });
+    // purple
     if (p.dice.purple) {
-      const raws = Array.from({ length: p.dice.purple }, () => roll("purple"));
-      const adj = raws.map((x) => adjust(x, 6));
+      const arr = Array.from({ length: p.dice.purple }, () => roll("purple"));
+      const adj = arr.map((x) => adjust(x, 6));
       let pts = adj.reduce((a, b) => a + b.v, 0) * 2;
-      if (col2x === "purple") pts *= 2;
+      if (c2x === "purple") pts *= 2;
       const vals = adj.map((o) => (o.imp ? wrapHL(o.v) : o.v));
       addLine(
         "purple",
         `(${vals.join(" + ")}) ×2倍 = ${
-          col2x === "purple" ? wrapHL(pts) : pts
+          c2x === "purple" ? wrapHL(pts) : pts
         }点`,
         pts
       );
     }
-    /* red */
+    // red
     if (p.dice.red) {
-      const raws = Array.from({ length: p.dice.red }, () => roll("red"));
-      const signed = raws.map((v) => {
-        const prob = gamble ? 0.75 : 0.33;
-        return Math.random() < prob ? -v : v;
-      });
+      const arr = Array.from({ length: p.dice.red }, () => roll("red"));
+      const signed = arr.map((v) =>
+        Math.random() < (gamble ? 0.75 : 0.33) ? -v : v
+      );
       const adj = signed
         .map((x) => adjust(Math.abs(x), 6))
         .map((o, i) => {
           o.v = signed[i] < 0 ? -o.v : o.v;
           return o;
         });
-      let pts = adj.reduce((a, b) => a + b.v, 0) * raws.length;
-      if (col2x === "red") pts *= 2;
-      const parts = adj
-        .map((o) => {
-          const txt = o.v >= 0 ? `+${Math.abs(o.v)}` : `${o.v}`;
-          return o.imp ? wrapHL(txt) : txt;
-        })
-        .join(" ");
+      let pts = adj.reduce((a, b) => a + b.v, 0) * arr.length;
+      if (c2x === "red") pts *= 2;
+      const parts = adj.map((o) =>
+        o.imp ? wrapHL(o.v >= 0 ? `+${o.v}` : o.v) : o.v >= 0 ? `+${o.v}` : o.v
+      );
       addLine(
         "red",
-        `(${parts}) × ${p.dice.red}個 = ${
-          col2x === "red" ? wrapHL(pts) : pts
+        `(${parts.join(" ")}) × ${arr.length}個 = ${
+          c2x === "red" ? wrapHL(pts) : pts
         }点`,
         pts
       );
     }
-    /* gold (always 20) */
+    // gold
     if (p.dice.gold) {
       let pts = 20 * p.dice.gold;
-      if (col2x === "gold") pts *= 2;
+      if (c2x === "gold") pts *= 2;
       addLine(
         "gold",
-        `${p.dice.gold}個 × 20 = ${col2x === "gold" ? wrapHL(pts) : pts}点`,
+        `${p.dice.gold}個 × 20 = ${c2x === "gold" ? wrapHL(pts) : pts}点`,
         pts
       );
     }
 
-    p.history[currentRound - 1] = turn;
-    sock.emit("rolledMe", {
-      round: currentRound,
-      turnScore: turn,
-      perType: per,
-    });
+    p.history[currentRound - 1] = turnScore;
+    sock.emit("rolledMe", { round: currentRound, turnScore, perType });
 
+    // ラウンド完了判定
     if (readyCnt === Object.keys(players).length) {
       io.emit("roundEnd", { players, currentRound });
       const tops = topIds(currentRound - 1);
       if (currentRound >= MAX_ROUNDS) {
+        const winners = tops.map((id) => players[id].name);
         io.emit("gameEnd", {
           players: JSON.parse(JSON.stringify(players)),
-          winners: tops.map((id) => players[id].name),
+          winners,
         });
         toLobby();
       } else {
         currentRound++;
         readyCnt = 0;
         Object.values(players).forEach((p) => {
-          p.rolled = false;
-          p.picked = false;
+          p.rolled = p.picked = false;
         });
         currentEvent = chooseEvent();
         io.emit("roundEvent", currentEvent);
         sendOffers(tops);
       }
-    } else io.emit("state", players);
+    } else {
+      io.emit("state", players);
+    }
   });
 
   sock.on("disconnect", () => {
@@ -295,47 +351,7 @@ io.on("connection", (sock) => {
   });
 });
 
-/*───────── 共通関数 ────────*/
-function toLobby() {
-  gameStarted = false;
-  currentRound = 0;
-  readyCnt = 0;
-  currentEvent = null;
-  Object.values(players).forEach((p) => {
-    p.dice = {
-      yellow: 1,
-      purple: 0,
-      red: 0,
-      green: 0,
-      blue: 0,
-      pink: 0,
-      gold: 0,
-    };
-    p.history = Array(MAX_ROUNDS).fill("-");
-    p.rolled = p.picked = false;
-  });
-}
-function sendOffers(topIds) {
-  const pool = ["yellow", "purple", "red", "green", "blue", "pink"];
-  /* gold は 3 % で候補に入る */
-  function randomDie() {
-    return Math.random() < 0.03
-      ? "gold"
-      : pool[Math.floor(Math.random() * pool.length)];
-  }
-  const list3 = [randomDie(), randomDie(), randomDie()];
-  for (const id in players) {
-    const sock = io.sockets.sockets.get(id);
-    if (!sock) continue;
-    sock.emit(
-      "offers",
-      topIds.includes(id) ? [list3[Math.floor(Math.random() * 3)]] : list3
-    );
-  }
-}
-
-/*───────── 起動 ────────*/
+// サーバ起動
 const PORT = process.env.PORT || 3000;
-http.listen(PORT, () =>
-  console.log(`🐼 Panda Royal → http://localhost:${PORT}`)
-);
+const HOST = getLocalExternalIp();
+http.listen(PORT, () => console.log(`🐼 Panda Royal → http://${HOST}:${PORT}`));
