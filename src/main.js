@@ -1,7 +1,12 @@
-import { io } from "socket.io-client";
-const socket = io();
+/**
+ * パンダロイヤル – P2P版 メインエントリ
+ * ホスト: ゲームロジック実行 + P2P通信管理
+ * ゲスト: UI表示 + 入力送信のみ
+ */
+import { HostNetwork, GuestNetwork } from "./network.js";
+import { GameState, MAX_ROUNDS, COL_LABEL, COL_HEX } from "./gameLogic.js";
 
-/* ---------- 定義 ---------- */
+/* ---------- ダイスUI定義 ---------- */
 const LABEL = {
   yellow: { name: "黄色（6面）", effect: "出目の合計が得点", hex: "#ffd43b" },
   purple: {
@@ -31,9 +36,7 @@ const LABEL = {
     hex: "#ffd700",
   },
 };
-
-/* ---------- イベント一覧 (クライアント用) ---------- */
-const EVENTS = [
+const EVENT_DESC = [
   { name: "オッドブースト", desc: "奇数出目が 2 倍！" },
   { name: "イーブンブレイク", desc: "偶数出目が 半分！" },
   { name: "カラーフォーカス", desc: "選ばれた色のダイス効果が 2 倍！" },
@@ -43,12 +46,34 @@ const EVENTS = [
 
 /* ---------- DOM ---------- */
 const $ = (id) => document.getElementById(id);
+
+// Scenes
+const sceneLobby = $("sceneLobby");
+const sceneHostWait = $("sceneHostWait");
+const sceneGuestJoin = $("sceneGuestJoin");
+const sceneGame = $("sceneGame");
+
+// Lobby
+const nameInput = $("nameInput");
+const hostBtn = $("hostBtn");
+const joinBtn = $("joinBtn");
+
+// Host wait
+const roomCodeDisplay = $("roomCodeDisplay");
+const playerList = $("playerList");
 const startBtn = $("startBtn");
+
+// Guest join
+const codeInput = $("codeInput");
+const connectBtn = $("connectBtn");
+const connectStatus = $("connectStatus");
+const backBtn = $("backBtn");
+
+// Game
 const rollBtn = $("rollBtn");
 const resetBtn = $("resetBtn");
 const rematchBtn = $("rematchBtn");
 const winnerH2 = $("winner");
-
 const offersCard = $("offersCard");
 const offersDiv = $("offers");
 const waitingP = $("waiting");
@@ -57,83 +82,368 @@ const detailDiv = $("detail");
 const tbody = $("scoreBody");
 const helpDiv = $("diceHelp");
 const eventList = $("eventList");
+const banner = $("eventBanner");
+const disconnectOverlay = $("disconnectOverlay");
 
-let banner = $("eventBanner");
-if (!banner) {
-  banner = document.createElement("p");
-  banner.id = "eventBanner";
-  banner.style.cssText = `
-    margin:8px 0;
-    padding:8px 12px;
-    font-weight:700;
-    font-size:1.1rem;
-    color:#fff;
-    border-radius:8px;
-    text-align:center;
-    display:none;
-  `;
-  infoP.after(banner);
+/* ---------- State ---------- */
+let mode = null; // 'host' | 'guest'
+let myName = "";
+let myPeerId = "";
+let hostNet = null;
+let guestNet = null;
+let game = null; // GameState (host only)
+
+// ホストのピアID (ホスト自身を players に入れるために使用)
+const HOST_LOCAL_ID = "__host__";
+
+/* ---------- シーン切替 ---------- */
+function showScene(scene) {
+  [sceneLobby, sceneHostWait, sceneGuestJoin, sceneGame].forEach((s) =>
+    s.classList.remove("active"),
+  );
+  scene.classList.add("active");
 }
 
 /* ---------- 初期表示 ---------- */
-rollBtn.style.display = "none";
-rematchBtn.style.display = "none";
-offersCard.style.display = "none";
-winnerH2.style.display = "none";
-
-/* ---------- 名前登録 ---------- */
-const myName = prompt("名前を入力してください")?.trim() || "名無し";
-socket.emit("setName", myName);
-
-/* ---------- ダイス効果表示 ---------- */
 helpDiv.innerHTML = Object.values(LABEL)
   .map((d) => `<p><b>${d.name}：</b>${d.effect}</p>`)
   .join("");
-
-/* ---------- イベント一覧表示 ---------- */
-eventList.innerHTML = EVENTS.map(
-  (e) => `<li><b>${e.name}：</b>${e.desc}</li>`
+eventList.innerHTML = EVENT_DESC.map(
+  (e) => `<li><b>${e.name}：</b>${e.desc}</li>`,
 ).join("");
 
-/* ---------- ボタンハンドラ ---------- */
+/* ---------- 名前バリデーション ---------- */
+function getName() {
+  const n = nameInput.value.trim();
+  if (!n) {
+    nameInput.focus();
+    nameInput.style.borderColor = "#fa5252";
+    setTimeout(() => (nameInput.style.borderColor = ""), 1500);
+    return null;
+  }
+  return n;
+}
+
+/* =============================================
+   ホストモード
+   ============================================= */
+hostBtn.onclick = async () => {
+  const name = getName();
+  if (!name) return;
+  myName = name;
+  mode = "host";
+  hostBtn.disabled = true;
+
+  hostNet = new HostNetwork();
+  game = new GameState();
+
+  try {
+    const code = await hostNet.start();
+    roomCodeDisplay.textContent = code;
+    showScene(sceneHostWait);
+
+    // ホスト自身をプレイヤーに追加
+    game.addPlayer(HOST_LOCAL_ID, myName);
+    updatePlayerList();
+
+    // ゲスト接続ハンドラ
+    hostNet.onPlayerConnect = (peerId) => {
+      // 名前はまだ来ていない → setNameを待つ
+    };
+    hostNet.onPlayerDisconnect = (peerId) => {
+      game.removePlayer(peerId);
+      updatePlayerList();
+      hostNet.broadcast("state", game.serialize());
+    };
+
+    // メッセージハンドラ登録
+    hostNet.on("setName", (peerId, name) => {
+      if (game.addPlayer(peerId, name)) {
+        updatePlayerList();
+        hostNet.broadcast("state", game.serialize());
+      } else {
+        hostNet.sendTo(peerId, "joinDenied", null);
+      }
+    });
+
+    hostNet.on("roll", (peerId) => {
+      hostHandleRoll(peerId);
+    });
+
+    hostNet.on("pick", (peerId, col) => {
+      if (game.pickDie(peerId, col)) {
+        hostNet.broadcast("state", game.serialize());
+      }
+    });
+
+    hostNet.on("resetGame", () => {
+      hostResetGame();
+    });
+  } catch (err) {
+    alert("ホスト開始に失敗しました: " + err.message);
+    hostBtn.disabled = false;
+  }
+};
+
+function updatePlayerList() {
+  playerList.innerHTML = "";
+  for (const [id, p] of Object.entries(game.players)) {
+    const li = document.createElement("li");
+    li.innerHTML = `<span class="status-dot connected"></span>${p.name}${id === HOST_LOCAL_ID ? " (ホスト)" : ""}`;
+    playerList.appendChild(li);
+  }
+  startBtn.disabled = Object.keys(game.players).length < 2;
+}
+
 startBtn.onclick = () => {
-  socket.emit("startGame");
-  startBtn.disabled = true;
-  rollBtn.style.display = "inline-block";
+  if (!game.startGame()) return;
+  game.currentEvent = null;
+
+  const state = game.serialize();
+  hostNet.broadcast("state", state);
+  hostNet.broadcast("roundEvent", null);
+  hostNet.broadcast("gameStarted", true);
+
+  // ホスト自身もゲーム画面へ
+  showScene(sceneGame);
+  rollBtn.classList.remove("hidden");
   rollBtn.disabled = false;
+  drawFromState(state);
+  showEventBanner(null);
 };
-rollBtn.onclick = () => socket.emit("roll");
-resetBtn.onclick = () => socket.emit("resetGame");
+
+/* ホスト: ロール処理 */
+function hostHandleRoll(peerId) {
+  const result = game.rollDice(peerId);
+  if (!result) return;
+
+  // ロールした本人に結果送信
+  const rollData = {
+    round: game.currentRound,
+    turnScore: result.turnScore,
+    perType: result.perType,
+  };
+
+  if (peerId === HOST_LOCAL_ID) {
+    onMyRollResult(rollData);
+  } else {
+    hostNet.sendTo(peerId, "rolledMe", rollData);
+  }
+
+  // 全員に状態更新
+  hostNet.broadcast("state", game.serialize());
+
+  // ラウンド完了チェック
+  const roundResult = game.checkRoundComplete();
+  if (roundResult) {
+    if (roundResult.type === "gameEnd") {
+      hostNet.broadcast("gameEnd", {
+        players: roundResult.players,
+        winners: roundResult.winners,
+      });
+      onGameEnd(roundResult.players, roundResult.winners);
+      game.resetGame();
+    } else {
+      // roundEnd
+      hostNet.broadcast("roundEnd", {
+        players: roundResult.players,
+        currentRound: roundResult.currentRound,
+      });
+      onRoundEnd(roundResult.players, roundResult.currentRound);
+
+      // オファー送信
+      for (const [pid, offers] of Object.entries(roundResult.offersMap)) {
+        if (pid === HOST_LOCAL_ID) {
+          onOffers(offers);
+        } else {
+          hostNet.sendTo(pid, "offers", offers);
+        }
+      }
+
+      // イベント通知
+      hostNet.broadcast("roundEvent", roundResult.currentEvent);
+      showEventBanner(roundResult.currentEvent);
+
+      // 新状態送信
+      hostNet.broadcast("state", game.serialize());
+    }
+  }
+}
+
+/* ホスト: リセット */
+function hostResetGame() {
+  game.resetGame();
+  hostNet.broadcast("resetDone", null);
+  hostNet.broadcast("state", game.serialize());
+
+  // ホスト自身のUI
+  onResetDone();
+}
+
+/* ホスト: ロールボタン */
+function hostRoll() {
+  hostHandleRoll(HOST_LOCAL_ID);
+}
+
+/* ホスト: ピック */
+function hostPick(col) {
+  if (game.pickDie(HOST_LOCAL_ID, col)) {
+    hostNet.broadcast("state", game.serialize());
+    rollBtn.disabled = false;
+  }
+}
+
+/* =============================================
+   ゲストモード
+   ============================================= */
+joinBtn.onclick = () => {
+  const name = getName();
+  if (!name) return;
+  myName = name;
+  mode = "guest";
+  showScene(sceneGuestJoin);
+  codeInput.focus();
+};
+
+backBtn.onclick = () => {
+  showScene(sceneLobby);
+  mode = null;
+};
+
+connectBtn.onclick = async () => {
+  const code = codeInput.value.trim().toUpperCase();
+  if (code.length < 4) {
+    codeInput.style.borderColor = "#fa5252";
+    setTimeout(() => (codeInput.style.borderColor = ""), 1500);
+    return;
+  }
+  connectBtn.disabled = true;
+  connectStatus.textContent = "接続中…";
+
+  guestNet = new GuestNetwork();
+
+  try {
+    myPeerId = await guestNet.connect(code);
+
+    // 名前送信
+    guestNet.send("setName", myName);
+
+    // ハンドラ登録
+    guestNet.on("joinDenied", () => {
+      alert("ゲーム進行中のため参加できません");
+      guestNet.destroy();
+      showScene(sceneLobby);
+    });
+
+    guestNet.on("state", (state) => {
+      drawFromState(state);
+    });
+
+    guestNet.on("gameStarted", () => {
+      showScene(sceneGame);
+      rollBtn.classList.remove("hidden");
+      rollBtn.disabled = false;
+    });
+
+    guestNet.on("roundEvent", (ev) => {
+      showEventBanner(ev);
+    });
+
+    guestNet.on("rolledMe", (data) => {
+      onMyRollResult(data);
+    });
+
+    guestNet.on("offers", (list) => {
+      onOffers(list);
+    });
+
+    guestNet.on("roundEnd", ({ players, currentRound }) => {
+      onRoundEnd(players, currentRound);
+    });
+
+    guestNet.on("gameEnd", ({ players, winners }) => {
+      onGameEnd(players, winners);
+    });
+
+    guestNet.on("resetDone", () => {
+      onResetDone();
+    });
+
+    guestNet.onDisconnect = () => {
+      disconnectOverlay.classList.remove("hidden");
+      disconnectOverlay.style.display = "flex";
+    };
+
+    // 接続成功 → ホスト待機画面で待つ (ゲーム開始はホストが行う)
+    connectStatus.textContent =
+      "✅ 接続完了！ ホストのゲーム開始を待っています…";
+    connectBtn.disabled = false;
+
+    // ゲスト待機 → ゲーム開始でsceneGameに切り替わる
+  } catch (err) {
+    connectStatus.textContent = "❌ 接続失敗: " + err.message;
+    connectBtn.disabled = false;
+    if (guestNet) {
+      guestNet.destroy();
+      guestNet = null;
+    }
+  }
+};
+
+/* =============================================
+   共通UI ハンドラ (ホスト/ゲスト両方で使用)
+   ============================================= */
+
+rollBtn.onclick = () => {
+  if (mode === "host") {
+    hostRoll();
+  } else {
+    guestNet.send("roll", null);
+  }
+};
+
+resetBtn.onclick = () => {
+  if (mode === "host") {
+    hostResetGame();
+  } else {
+    guestNet.send("resetGame", null);
+  }
+};
+
 rematchBtn.onclick = () => {
-  socket.emit("resetGame");
+  if (mode === "host") {
+    hostResetGame();
+  } else {
+    guestNet.send("resetGame", null);
+  }
   rollBtn.disabled = false;
 };
 
-/* ---------- サーバーイベント ---------- */
-socket.on("resetDone", () => {
-  startBtn.disabled = false;
-  rollBtn.style.display = "none";
-  rematchBtn.style.display = "none";
-  offersCard.style.display = "none";
-  banner.style.display = "none";
-  winnerH2.style.display = "none";
-  detailDiv.innerHTML = "<h3>🎲 ダイス結果</h3><p>—</p>";
-});
-
-socket.on("roundEvent", (ev) => {
+/* ---------- イベントバナー ---------- */
+function showEventBanner(ev) {
   if (ev) {
     banner.textContent = `EVENT: ${ev.name} – ${ev.desc}`;
     banner.style.background = ev.color || "#d32f2f";
-    banner.style.display = "block";
+    banner.classList.remove("hidden");
   } else {
-    banner.style.display = "none";
+    banner.classList.add("hidden");
   }
-});
+}
 
-socket.on("state", (players) => draw(players));
+/* ---------- ロール結果受信 ---------- */
+function onMyRollResult({ round, turnScore, perType }) {
+  rollBtn.disabled = true;
+  infoP.textContent = `ラウンド ${round}：+${turnScore}点`;
+  detailDiv.innerHTML =
+    "<h3>🎲 ダイス結果</h3>" +
+    Object.entries(perType)
+      .map(([t, o]) => `<p><b>${LABEL[t].name}：</b>${o.formula}</p>`)
+      .join("");
+}
 
-socket.on("offers", (list) => {
-  offersCard.style.display = "block";
+/* ---------- オファー受信 ---------- */
+function onOffers(list) {
+  offersCard.classList.remove("hidden");
   offersDiv.innerHTML = "";
   rollBtn.disabled = true;
 
@@ -143,7 +453,6 @@ socket.on("offers", (list) => {
     b.classList.add("offer-btn", `offer-${t}`);
     b.style.background = LABEL[t].hex;
 
-    // ゴールドダイスは複数星をランダム配置
     if (t === "gold") {
       b.style.position = "relative";
       for (let i = 0; i < 6; i++) {
@@ -158,46 +467,59 @@ socket.on("offers", (list) => {
     }
 
     b.onclick = () => {
-      socket.emit("pick", t);
+      if (mode === "host") {
+        hostPick(t);
+      } else {
+        guestNet.send("pick", t);
+      }
       offersDiv.textContent = `(${LABEL[t].name} を取得)`;
       rollBtn.disabled = false;
     };
     offersDiv.appendChild(b);
   });
-});
+}
 
-socket.on("rolledMe", ({ round, turnScore, perType }) => {
+/* ---------- ラウンド終了 ---------- */
+function onRoundEnd(players, currentRound) {
+  infoP.textContent = `ラウンド ${currentRound} 終了！`;
   rollBtn.disabled = true;
-  infoP.textContent = `ラウンド ${round}：+${turnScore}点`;
+  drawPlayers(players);
+}
 
-  detailDiv.innerHTML =
-    "<h3>🎲 ダイス結果</h3>" +
-    Object.entries(perType)
-      .map(([t, o]) => `<p><b>${LABEL[t].name}：</b>${o.formula}</p>`)
-      .join("");
-});
-
-socket.on("roundEnd", ({ players, currentRound: rd }) => {
-  infoP.textContent = `ラウンド ${rd} 終了！`;
-  rollBtn.disabled = true;
-  draw(players);
-});
-
-socket.on("gameEnd", ({ players, winners }) => {
-  draw(players);
+/* ---------- ゲーム終了 ---------- */
+function onGameEnd(players, winners) {
+  drawPlayers(players);
   winnerH2.textContent =
     winners.length > 1
       ? `同点優勝: ${winners.join(" / ")}`
       : `優勝: ${winners[0]}`;
-  winnerH2.style.display = "block";
-  rollBtn.style.display = "none";
-  offersCard.style.display = "none";
-  rematchBtn.style.display = "inline-block";
+  winnerH2.classList.remove("hidden");
+  rollBtn.classList.add("hidden");
+  offersCard.classList.add("hidden");
+  rematchBtn.classList.remove("hidden");
   infoP.textContent = "ゲーム終了！「再戦！」で新ゲームを開始できます。";
-});
+}
 
-/* ---------- 描画ヘルパー ---------- */
-function draw(players) {
+/* ---------- リセット ---------- */
+function onResetDone() {
+  rollBtn.classList.remove("hidden");
+  rollBtn.disabled = false;
+  rematchBtn.classList.add("hidden");
+  offersCard.classList.add("hidden");
+  banner.classList.add("hidden");
+  winnerH2.classList.add("hidden");
+  detailDiv.innerHTML = "<h3>🎲 ダイス結果</h3><p>—</p>";
+  infoP.textContent = "";
+  waitingP.textContent = "";
+}
+
+/* ---------- 状態からUI更新 ---------- */
+function drawFromState(state) {
+  if (state.players) drawPlayers(state.players);
+}
+
+/* ---------- スコアボード描画 ---------- */
+function drawPlayers(players) {
   tbody.innerHTML = "";
   const waitingCount = Object.values(players).filter((p) => !p.rolled).length;
   waitingP.textContent = waitingCount

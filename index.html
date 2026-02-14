@@ -1,9 +1,21 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
     <title>🐼 パンダロイヤル – 10 Rounds</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <link
+      rel="apple-touch-icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐼</text></svg>"
+    />
     <link
       href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap"
       rel="stylesheet"
@@ -27,23 +39,26 @@
       }
       * {
         box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent;
       }
       body {
         margin: 0;
         font-family: "Poppins", sans-serif;
         background: var(--bg);
         color: #333;
+        padding-bottom: env(safe-area-inset-bottom);
       }
       header {
         background: var(--accent);
         color: #fff;
         text-align: center;
         padding: 1rem 2rem;
+        padding-top: calc(1rem + env(safe-area-inset-top));
         box-shadow: var(--shadow);
       }
       .container {
         max-width: 960px;
-        margin: 2rem auto;
+        margin: 1.5rem auto;
         padding: 0 1rem;
       }
       .card {
@@ -52,7 +67,7 @@
         border-radius: 12px;
         padding: 1.5rem;
         box-shadow: var(--shadow);
-        margin-bottom: 2rem;
+        margin-bottom: 1.5rem;
       }
 
       /* buttons */
@@ -60,20 +75,85 @@
         width: 100%;
         border: none;
         border-radius: 10px;
-        padding: 0.7rem 1rem;
-        font-size: 1rem;
+        padding: 0.9rem 1rem;
+        font-size: 1.05rem;
         font-weight: 600;
         color: #fff;
         background: var(--accent);
         cursor: pointer;
         transition: background 0.2s;
+        touch-action: manipulation;
+        min-height: 48px;
       }
       .btn:hover:not(:disabled) {
         background: var(--accent-d);
       }
+      .btn:active:not(:disabled) {
+        background: var(--accent-d);
+        transform: scale(0.97);
+      }
       .btn:disabled {
         opacity: 0.55;
         cursor: not-allowed;
+      }
+      .btn-secondary {
+        background: #868e96;
+      }
+      .btn-secondary:hover:not(:disabled),
+      .btn-secondary:active:not(:disabled) {
+        background: #495057;
+      }
+
+      /* inputs */
+      .input {
+        width: 100%;
+        border: 2px solid var(--border);
+        border-radius: 10px;
+        padding: 0.8rem 1rem;
+        font-size: 1.05rem;
+        font-family: "Poppins", sans-serif;
+        outline: none;
+        transition: border-color 0.2s;
+        min-height: 48px;
+      }
+      .input:focus {
+        border-color: var(--accent);
+      }
+
+      /* room code display */
+      .room-code {
+        font-size: 2.5rem;
+        font-weight: 700;
+        letter-spacing: 0.3em;
+        color: var(--accent);
+        text-align: center;
+        margin: 1rem 0;
+        font-family: monospace;
+      }
+
+      /* connection status dot */
+      .status-dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 6px;
+      }
+      .status-dot.connected {
+        background: #51cf66;
+      }
+      .status-dot.waiting {
+        background: #ffd43b;
+        animation: pulse 1.5s infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.4;
+        }
       }
 
       /* sparkle animation */
@@ -105,18 +185,25 @@
       .offer-btn {
         flex: 1 1 140px;
         min-width: 140px;
-        padding: 0.7rem 1rem;
+        padding: 0.9rem 1rem;
         font-weight: 600;
         border: none;
         border-radius: 12px;
         color: #333;
         box-shadow: var(--shadow);
         cursor: pointer;
-        transition: transform 0.15s, filter 0.15s;
+        transition:
+          transform 0.15s,
+          filter 0.15s;
+        touch-action: manipulation;
+        min-height: 48px;
       }
       .offer-btn:hover:not(:disabled) {
         transform: translateY(-4px);
         filter: brightness(1.05);
+      }
+      .offer-btn:active:not(:disabled) {
+        transform: scale(0.95);
       }
       .offer-btn:disabled {
         opacity: 0.55;
@@ -165,15 +252,21 @@
       }
 
       /* table */
+      .table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
       table {
         width: 100%;
         border-collapse: collapse;
+        min-width: 640px;
       }
       th,
       td {
         border: 1px solid var(--border);
         padding: 0.4rem 0.3rem;
         text-align: center;
+        white-space: nowrap;
       }
       th {
         background: #fafafa;
@@ -184,8 +277,51 @@
       tbody tr:nth-child(even) {
         background: #f7f7f7;
       }
+
+      /* player list in lobby */
+      .player-list {
+        list-style: none;
+        padding: 0;
+        margin: 0.5rem 0;
+      }
+      .player-list li {
+        padding: 0.5rem 0.8rem;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .player-list li:last-child {
+        border-bottom: none;
+      }
+
+      /* hidden helper */
+      .hidden {
+        display: none !important;
+      }
+
+      /* Scene transition */
+      .scene {
+        display: none;
+      }
+      .scene.active {
+        display: block;
+      }
+
       @media (max-width: 600px) {
-        table thead {
+        header h1 {
+          font-size: 1.2rem;
+        }
+        .room-code {
+          font-size: 2rem;
+        }
+        .container {
+          padding: 0 0.5rem;
+        }
+        .card {
+          padding: 1rem;
+        }
+        table {
           font-size: 0.8rem;
         }
       }
@@ -194,80 +330,194 @@
   <body>
     <header><h1>🐼 パンダロイヤル – 10 Rounds</h1></header>
     <div class="container">
-      <!-- Controls -->
-      <div
-        class="card"
-        style="
-          display: flex;
-          flex-direction: column;
-          gap: 1rem;
-          align-items: center;
-        "
-      >
-        <h2
-          id="winner"
-          style="display: none; color: var(--accent); margin: 0"
-        ></h2>
-        <button id="startBtn" class="btn">ゲーム開始</button>
-        <button id="rollBtn" class="btn">ダイスを振る！</button>
-        <button id="rematchBtn" class="btn" style="display: none">
-          再戦！
-        </button>
-        <p id="waiting" style="margin: 0; font-weight: 600"></p>
-        <p id="info" style="margin: 0; font-size: 1.1rem"></p>
-      </div>
-
-      <!-- Offers -->
-      <div id="offersCard" class="card">
-        <h3 style="margin-top: 0">🎁 獲得できるダイス</h3>
-        <div id="offers"></div>
-      </div>
-
-      <!-- Scoreboard + Dice Result -->
-      <div class="card">
-        <h3 style="margin-top: 0">📊 スコアボード</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>プレイヤー</th>
-              <th>1</th>
-              <th>2</th>
-              <th>3</th>
-              <th>4</th>
-              <th>5</th>
-              <th>6</th>
-              <th>7</th>
-              <th>8</th>
-              <th>9</th>
-              <th>10</th>
-              <th>手持ち<br /><small>黄/紫/赤/緑/青/桃/金</small></th>
-            </tr>
-          </thead>
-          <tbody id="scoreBody"></tbody>
-        </table>
-        <div id="detail" style="margin-top: 1.5rem">
-          <h3 style="margin-top: 0">🎲 ダイス結果</h3>
-          <p>—</p>
+      <!-- ===== SCENE: ロビー (ホスト/ゲスト選択) ===== -->
+      <div id="sceneLobby" class="scene active">
+        <div class="card" style="text-align: center">
+          <h2 style="margin-top: 0">🐼 ようこそ！</h2>
+          <div style="margin-bottom: 1rem">
+            <input
+              id="nameInput"
+              class="input"
+              type="text"
+              placeholder="名前を入力"
+              maxlength="12"
+              autocomplete="off"
+              style="text-align: center"
+            />
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 0.8rem">
+            <button id="hostBtn" class="btn">ホストで部屋を作る</button>
+            <button id="joinBtn" class="btn btn-secondary">
+              部屋に参加する
+            </button>
+          </div>
         </div>
       </div>
 
-      <!-- Dice Effects -->
-      <div class="card">
-        <h3 style="margin-top: 0">📝 ダイス効果</h3>
-        <div id="diceHelp"></div>
+      <!-- ===== SCENE: ホスト待機 ===== -->
+      <div id="sceneHostWait" class="scene">
+        <div class="card" style="text-align: center">
+          <h2 style="margin-top: 0">📡 接続待ち</h2>
+          <p>このルームコードを参加者に伝えてください：</p>
+          <div id="roomCodeDisplay" class="room-code">----</div>
+          <p>
+            <span class="status-dot waiting"></span
+            >プレイヤーの接続を待っています…
+          </p>
+          <ul id="playerList" class="player-list"></ul>
+          <button id="startBtn" class="btn" disabled>ゲーム開始</button>
+        </div>
       </div>
 
-      <!-- Event List -->
-      <div class="card">
-        <h3 style="margin-top: 0">🔍 イベント一覧</h3>
-        <ul id="eventList" style="margin: 0 1rem"></ul>
+      <!-- ===== SCENE: ゲスト接続 ===== -->
+      <div id="sceneGuestJoin" class="scene">
+        <div class="card" style="text-align: center">
+          <h2 style="margin-top: 0">🔗 部屋に参加</h2>
+          <p>ホストのルームコードを入力：</p>
+          <input
+            id="codeInput"
+            class="input"
+            type="text"
+            placeholder="4桁コード"
+            maxlength="4"
+            autocomplete="off"
+            style="
+              text-align: center;
+              letter-spacing: 0.3em;
+              font-size: 1.5rem;
+              font-family: monospace;
+            "
+          />
+          <div style="margin-top: 1rem">
+            <button id="connectBtn" class="btn">接続する</button>
+          </div>
+          <p id="connectStatus" style="margin-top: 0.5rem; color: #868e96"></p>
+          <button
+            id="backBtn"
+            class="btn btn-secondary"
+            style="margin-top: 0.5rem"
+          >
+            戻る
+          </button>
+        </div>
       </div>
 
-      <!-- Reset -->
-      <div style="text-align: center; margin: 2rem 0">
-        <button id="resetBtn" class="btn" style="max-width: 300px">
-          ゲームリセット
-        </button>
+      <!-- ===== SCENE: ゲーム ===== -->
+      <div id="sceneGame" class="scene">
+        <!-- Controls -->
+        <div
+          class="card"
+          style="
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            align-items: center;
+          "
+        >
+          <h2
+            id="winner"
+            class="hidden"
+            style="color: var(--accent); margin: 0"
+          ></h2>
+          <p
+            id="eventBanner"
+            class="hidden"
+            style="
+              margin: 0;
+              padding: 8px 12px;
+              font-weight: 700;
+              font-size: 1.1rem;
+              color: #fff;
+              border-radius: 8px;
+              text-align: center;
+              width: 100%;
+            "
+          ></p>
+          <button id="rollBtn" class="btn">ダイスを振る！</button>
+          <button id="rematchBtn" class="btn hidden">再戦！</button>
+          <p id="waiting" style="margin: 0; font-weight: 600"></p>
+          <p id="info" style="margin: 0; font-size: 1.1rem"></p>
+        </div>
+
+        <!-- Offers -->
+        <div id="offersCard" class="card hidden">
+          <h3 style="margin-top: 0">🎁 獲得できるダイス</h3>
+          <div id="offers"></div>
+        </div>
+
+        <!-- Scoreboard + Dice Result -->
+        <div class="card">
+          <h3 style="margin-top: 0">📊 スコアボード</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>プレイヤー</th>
+                  <th>1</th>
+                  <th>2</th>
+                  <th>3</th>
+                  <th>4</th>
+                  <th>5</th>
+                  <th>6</th>
+                  <th>7</th>
+                  <th>8</th>
+                  <th>9</th>
+                  <th>10</th>
+                  <th>手持ち<br /><small>黄/紫/赤/緑/青/桃/金</small></th>
+                </tr>
+              </thead>
+              <tbody id="scoreBody"></tbody>
+            </table>
+          </div>
+          <div id="detail" style="margin-top: 1.5rem">
+            <h3 style="margin-top: 0">🎲 ダイス結果</h3>
+            <p>—</p>
+          </div>
+        </div>
+
+        <!-- Dice Effects -->
+        <div class="card">
+          <h3 style="margin-top: 0">📝 ダイス効果</h3>
+          <div id="diceHelp"></div>
+        </div>
+
+        <!-- Event List -->
+        <div class="card">
+          <h3 style="margin-top: 0">🔍 イベント一覧</h3>
+          <ul id="eventList" style="margin: 0 1rem"></ul>
+        </div>
+
+        <!-- Reset -->
+        <div style="text-align: center; margin: 2rem 0">
+          <button
+            id="resetBtn"
+            class="btn btn-secondary"
+            style="max-width: 300px"
+          >
+            ゲームリセット
+          </button>
+        </div>
+      </div>
+
+      <!-- ===== 接続切断通知 ===== -->
+      <div
+        id="disconnectOverlay"
+        class="hidden"
+        style="
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.6);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 9999;
+        "
+      >
+        <div class="card" style="max-width: 360px; text-align: center">
+          <h2 style="margin-top: 0; color: #fa5252">⚠️ 接続が切れました</h2>
+          <p>ホストとの接続が失われました。</p>
+          <button onclick="location.reload()" class="btn">トップに戻る</button>
+        </div>
       </div>
     </div>
     <script type="module" src="/src/main.js"></script>

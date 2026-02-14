@@ -1,5 +1,8 @@
-/* 既存 roll に追加 */
-exports.roll = (type) => {
+/**
+ * ダイスロール関数 (ES Module版)
+ * server/util/dice.js から移植
+ */
+export function roll(type) {
   switch (type) {
     case "yellow":
       return 1 + Math.floor(Math.random() * 6); // 1-6
@@ -10,12 +13,10 @@ exports.roll = (type) => {
     case "green":
       return 1 + Math.floor(Math.random() * 20); // 1-20
     case "blue": {
-      // 1,3,5,7,9
       const odds = [1, 3, 5, 7, 9];
       return odds[Math.floor(Math.random() * odds.length)];
     }
     case "pink": {
-      // 2,4,6,8,10
       const evens = [2, 4, 6, 8, 10];
       return evens[Math.floor(Math.random() * evens.length)];
     }
@@ -24,4 +25,4 @@ exports.roll = (type) => {
     default:
       return 0;
   }
-};
+}
