@@ -489,7 +489,14 @@ function onOffers(list) {
     const b = document.createElement("button");
     b.textContent = LABEL[t].name;
     b.classList.add("offer-btn", `offer-${t}`);
-    b.style.background = LABEL[t].hex;
+    if (t === "rainbow") {
+      b.style.background =
+        "linear-gradient(135deg, #ff6b6b, #ffd43b, #8ce99a, #74c0fc, #b197fc, #ff99c8)";
+      b.style.color = "#fff";
+      b.style.textShadow = "0 1px 2px rgba(0,0,0,0.3)";
+    } else {
+      b.style.background = LABEL[t].hex;
+    }
 
     if (t === "rainbow") {
       b.style.position = "relative";
