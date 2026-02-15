@@ -277,6 +277,56 @@
       tbody tr:nth-child(even) {
         background: #f7f7f7;
       }
+      /* 合計列 */
+      .total-cell {
+        font-weight: 700;
+        font-size: 1.1em;
+        color: var(--accent-d);
+        background: #e6f9f5 !important;
+      }
+      /* ダイスバッジ */
+      .dice-badges {
+        display: flex;
+        gap: 3px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .dice-badge {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 6px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #333;
+        line-height: 1.3;
+      }
+      /* ラウンドのトップスコア */
+      .top-score {
+        color: var(--accent-d);
+        font-weight: 700;
+      }
+      /* ロールアニメ */
+      @keyframes shake {
+        0%,
+        100% {
+          transform: rotate(0deg);
+        }
+        20% {
+          transform: rotate(-8deg);
+        }
+        40% {
+          transform: rotate(8deg);
+        }
+        60% {
+          transform: rotate(-5deg);
+        }
+        80% {
+          transform: rotate(5deg);
+        }
+      }
+      .rolling {
+        animation: shake 0.4s ease-in-out;
+      }
 
       /* player list in lobby */
       .player-list {
@@ -359,7 +409,25 @@
         <div class="card" style="text-align: center">
           <h2 style="margin-top: 0">📡 接続待ち</h2>
           <p>このルームコードを参加者に伝えてください：</p>
-          <div id="roomCodeDisplay" class="room-code">----</div>
+          <div
+            id="roomCodeDisplay"
+            class="room-code"
+            title="タップでコピー"
+            style="cursor: pointer"
+          >
+            ----
+          </div>
+          <p
+            id="copyMsg"
+            style="
+              font-size: 0.85rem;
+              color: var(--accent);
+              opacity: 0;
+              transition: opacity 0.3s;
+            "
+          >
+            コピーしました！
+          </p>
           <p>
             <span class="status-dot waiting"></span
             >プレイヤーの接続を待っています…
@@ -377,8 +445,10 @@
           <input
             id="codeInput"
             class="input"
-            type="text"
-            placeholder="4桁コード"
+            type="tel"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            placeholder="4桁の数字"
             maxlength="4"
             autocomplete="off"
             style="
@@ -433,7 +503,16 @@
               width: 100%;
             "
           ></p>
-          <button id="rollBtn" class="btn">ダイスを振る！</button>
+          <p
+            id="roundLabel"
+            style="
+              margin: 0;
+              font-size: 1.3rem;
+              font-weight: 700;
+              color: var(--accent);
+            "
+          ></p>
+          <button id="rollBtn" class="btn">🎲 ダイスを振る！</button>
           <button id="rematchBtn" class="btn hidden">再戦！</button>
           <p id="waiting" style="margin: 0; font-weight: 600"></p>
           <p id="info" style="margin: 0; font-size: 1.1rem"></p>
@@ -463,7 +542,8 @@
                   <th>8</th>
                   <th>9</th>
                   <th>10</th>
-                  <th>手持ち<br /><small>黄/紫/赤/緑/青/桃/金</small></th>
+                  <th>合計</th>
+                  <th>手持ちダイス</th>
                 </tr>
               </thead>
               <tbody id="scoreBody"></tbody>

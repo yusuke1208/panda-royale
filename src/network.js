@@ -14,12 +14,8 @@ const PREFIX = "panda-royale-";
  * ランダム4桁コードを生成
  */
 function generateCode() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 紛らわしい文字を除外
-  let code = "";
-  for (let i = 0; i < 4; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return code;
+  // 数字のみ4桁 (1000-9999)
+  return String(1000 + Math.floor(Math.random() * 9000));
 }
 
 /* ========================================
@@ -157,7 +153,7 @@ export class GuestNetwork {
    */
   connect(roomCode) {
     return new Promise((resolve, reject) => {
-      const hostId = PREFIX + roomCode.toUpperCase().trim();
+      const hostId = PREFIX + roomCode.trim();
 
       this.peer = new Peer(undefined, {
         debug: 0,

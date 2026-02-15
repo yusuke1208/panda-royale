@@ -84,6 +84,8 @@ const helpDiv = $("diceHelp");
 const eventList = $("eventList");
 const banner = $("eventBanner");
 const disconnectOverlay = $("disconnectOverlay");
+const roundLabel = $("roundLabel");
+const copyMsg = $("copyMsg");
 
 /* ---------- State ---------- */
 let mode = null; // 'host' | 'guest'
@@ -140,6 +142,12 @@ hostBtn.onclick = async () => {
   try {
     const code = await hostNet.start();
     roomCodeDisplay.textContent = code;
+    roomCodeDisplay.onclick = () => {
+      navigator.clipboard.writeText(code).then(() => {
+        copyMsg.style.opacity = "1";
+        setTimeout(() => (copyMsg.style.opacity = "0"), 1500);
+      });
+    };
     showScene(sceneHostWait);
 
     // ホスト自身をプレイヤーに追加
@@ -210,6 +218,7 @@ startBtn.onclick = () => {
   rollBtn.disabled = false;
   drawFromState(state);
   showEventBanner(null);
+  updateRoundLabel(1);
 };
 
 /* ホスト: ロール処理 */
@@ -311,8 +320,8 @@ backBtn.onclick = () => {
 };
 
 connectBtn.onclick = async () => {
-  const code = codeInput.value.trim().toUpperCase();
-  if (code.length < 4) {
+  const code = codeInput.value.trim();
+  if (!/^\d{4}$/.test(code)) {
     codeInput.style.borderColor = "#fa5252";
     setTimeout(() => (codeInput.style.borderColor = ""), 1500);
     return;
@@ -395,6 +404,8 @@ connectBtn.onclick = async () => {
    ============================================= */
 
 rollBtn.onclick = () => {
+  rollBtn.classList.add("rolling");
+  setTimeout(() => rollBtn.classList.remove("rolling"), 400);
   if (mode === "host") {
     hostRoll();
   } else {
@@ -419,6 +430,15 @@ rematchBtn.onclick = () => {
   rollBtn.disabled = false;
 };
 
+/* ---------- ラウンド表示 ---------- */
+function updateRoundLabel(round) {
+  if (round && round <= MAX_ROUNDS) {
+    roundLabel.textContent = `ラウンド ${round} / ${MAX_ROUNDS}`;
+  } else {
+    roundLabel.textContent = "";
+  }
+}
+
 /* ---------- イベントバナー ---------- */
 function showEventBanner(ev) {
   if (ev) {
@@ -433,6 +453,7 @@ function showEventBanner(ev) {
 /* ---------- ロール結果受信 ---------- */
 function onMyRollResult({ round, turnScore, perType }) {
   rollBtn.disabled = true;
+  updateRoundLabel(round);
   infoP.textContent = `ラウンド ${round}：+${turnScore}点`;
   detailDiv.innerHTML =
     "<h3>🎲 ダイス結果</h3>" +
@@ -483,6 +504,7 @@ function onOffers(list) {
 function onRoundEnd(players, currentRound) {
   infoP.textContent = `ラウンド ${currentRound} 終了！`;
   rollBtn.disabled = true;
+  updateRoundLabel(currentRound + 1);
   drawPlayers(players);
 }
 
@@ -491,12 +513,13 @@ function onGameEnd(players, winners) {
   drawPlayers(players);
   winnerH2.textContent =
     winners.length > 1
-      ? `同点優勝: ${winners.join(" / ")}`
-      : `優勝: ${winners[0]}`;
+      ? `🏆 同点優勝: ${winners.join(" / ")}`
+      : `🏆 優勝: ${winners[0]}`;
   winnerH2.classList.remove("hidden");
   rollBtn.classList.add("hidden");
   offersCard.classList.add("hidden");
   rematchBtn.classList.remove("hidden");
+  roundLabel.textContent = "";
   infoP.textContent = "ゲーム終了！「再戦！」で新ゲームを開始できます。";
 }
 
@@ -511,27 +534,82 @@ function onResetDone() {
   detailDiv.innerHTML = "<h3>🎲 ダイス結果</h3><p>—</p>";
   infoP.textContent = "";
   waitingP.textContent = "";
+  roundLabel.textContent = "";
 }
 
 /* ---------- 状態からUI更新 ---------- */
 function drawFromState(state) {
   if (state.players) drawPlayers(state.players);
+  if (state.currentRound) updateRoundLabel(state.currentRound);
 }
 
 /* ---------- スコアボード描画 ---------- */
+const DICE_BADGE_COLORS = {
+  yellow: "#ffe066",
+  purple: "#c1a5ff",
+  red: "#ff8d8d",
+  green: "#87e293",
+  blue: "#74c0fc",
+  pink: "#ff99c8",
+  gold: "#ffd700",
+};
+const DICE_SHORT = {
+  yellow: "黄",
+  purple: "紫",
+  red: "赤",
+  green: "緑",
+  blue: "青",
+  pink: "桃",
+  gold: "金",
+};
+
 function drawPlayers(players) {
   tbody.innerHTML = "";
-  const waitingCount = Object.values(players).filter((p) => !p.rolled).length;
+  const pArr = Object.values(players);
+  const waitingCount = pArr.filter((p) => !p.rolled).length;
   waitingP.textContent = waitingCount
     ? `🕒 他 ${waitingCount} 人のロール待ち…`
     : "";
 
-  Object.values(players).forEach((p) => {
+  // 各ラウンドのトップスコアを算出
+  const roundMax = Array(MAX_ROUNDS).fill(0);
+  for (let r = 0; r < MAX_ROUNDS; r++) {
+    pArr.forEach((p) => {
+      if (typeof p.history[r] === "number" && p.history[r] > roundMax[r]) {
+        roundMax[r] = p.history[r];
+      }
+    });
+  }
+
+  pArr.forEach((p) => {
+    const total = p.history.reduce(
+      (a, b) => a + (typeof b === "number" ? b : 0),
+      0,
+    );
     const tr = document.createElement("tr");
+
+    // 各ラウンドのセル（トップスコアにハイライト）
+    const roundCells = p.history
+      .map((s, i) => {
+        const isTop = typeof s === "number" && s > 0 && s === roundMax[i];
+        return `<td${isTop ? ' class="top-score"' : ""}>${s}</td>`;
+      })
+      .join("");
+
+    // ダイスバッジ
+    const badges = Object.entries(p.dice)
+      .filter(([, v]) => v > 0)
+      .map(
+        ([k, v]) =>
+          `<span class="dice-badge" style="background:${DICE_BADGE_COLORS[k]}">${DICE_SHORT[k]}${v}</span>`,
+      )
+      .join("");
+
     tr.innerHTML =
       `<th>${p.name}</th>` +
-      p.history.map((s) => `<td>${s}</td>`).join("") +
-      `<td>黄:${p.dice.yellow} 紫:${p.dice.purple} 赤:${p.dice.red} 緑:${p.dice.green} 青:${p.dice.blue} 桃:${p.dice.pink} 金:${p.dice.gold}</td>`;
+      roundCells +
+      `<td class="total-cell">${total || "-"}</td>` +
+      `<td><div class="dice-badges">${badges || "-"}</div></td>`;
     tbody.appendChild(tr);
   });
 }
