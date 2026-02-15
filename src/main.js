@@ -626,9 +626,10 @@ function drawPlayers(players) {
     const badges = Object.entries(p.dice)
       .filter(([, v]) => v > 0)
       .map(([k, v]) => {
-        const bg = k === "rainbow"
-          ? "background:linear-gradient(135deg,#ff6b6b,#ffd43b,#8ce99a,#74c0fc,#b197fc,#ff99c8);color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.3)"
-          : `background:${DICE_BADGE_COLORS[k]}`;
+        const bg =
+          k === "rainbow"
+            ? "background:linear-gradient(135deg,#ff6b6b,#ffd43b,#8ce99a,#74c0fc,#b197fc,#ff99c8);color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.3)"
+            : `background:${DICE_BADGE_COLORS[k]}`;
         return `<span class="dice-badge" style="${bg}">${DICE_SHORT[k]}${v}</span>`;
       })
       .join("");
