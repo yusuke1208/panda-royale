@@ -20,7 +20,7 @@ export function roll(type) {
       const evens = [2, 4, 6, 8, 10];
       return evens[Math.floor(Math.random() * evens.length)];
     }
-    case "gold":
+    case "rainbow":
       return 20; // 常に 20
     default:
       return 0;

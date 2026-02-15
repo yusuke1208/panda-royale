@@ -35,7 +35,7 @@
         --green: #87e293;
         --blue: #74c0fc;
         --pink: #ff99c8;
-        --gold: #ffd700;
+        --rainbow: linear-gradient(135deg, #ff6b6b, #ffd43b, #8ce99a, #74c0fc, #b197fc, #ff99c8);
       }
       * {
         box-sizing: border-box;
@@ -227,8 +227,10 @@
       .offer-pink {
         background: var(--pink);
       }
-      .offer-gold {
-        background: var(--gold);
+      .offer-rainbow {
+        background: linear-gradient(135deg, #ff6b6b, #ffd43b, #8ce99a, #74c0fc, #b197fc, #ff99c8);
+        color: #fff;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.3);
         position: relative;
         animation: sparkle 0.8s infinite alternate ease-in-out;
       }

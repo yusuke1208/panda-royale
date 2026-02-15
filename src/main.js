@@ -30,10 +30,10 @@ const LABEL = {
     effect: "2,4,6,8,10 のみ出る",
     hex: "#ff99c8",
   },
-  gold: {
-    name: "金色（20固定）",
+  rainbow: {
+    name: "虹色（20固定）",
     effect: "常に 20、入手確率 3 %",
-    hex: "#ffd700",
+    hex: "#ff6ec7",
   },
 };
 const EVENT_DESC = [
@@ -491,7 +491,7 @@ function onOffers(list) {
     b.classList.add("offer-btn", `offer-${t}`);
     b.style.background = LABEL[t].hex;
 
-    if (t === "gold") {
+    if (t === "rainbow") {
       b.style.position = "relative";
       for (let i = 0; i < 6; i++) {
         const star = document.createElement("span");
@@ -570,7 +570,7 @@ const DICE_BADGE_COLORS = {
   green: "#87e293",
   blue: "#74c0fc",
   pink: "#ff99c8",
-  gold: "#ffd700",
+  rainbow: "#ff6ec7",
 };
 const DICE_SHORT = {
   yellow: "黄",
@@ -579,7 +579,7 @@ const DICE_SHORT = {
   green: "緑",
   blue: "青",
   pink: "桃",
-  gold: "金",
+  rainbow: "虹",
 };
 
 function drawPlayers(players) {
@@ -625,10 +625,12 @@ function drawPlayers(players) {
     // ダイスバッジ
     const badges = Object.entries(p.dice)
       .filter(([, v]) => v > 0)
-      .map(
-        ([k, v]) =>
-          `<span class="dice-badge" style="background:${DICE_BADGE_COLORS[k]}">${DICE_SHORT[k]}${v}</span>`,
-      )
+      .map(([k, v]) => {
+        const bg = k === "rainbow"
+          ? "background:linear-gradient(135deg,#ff6b6b,#ffd43b,#8ce99a,#74c0fc,#b197fc,#ff99c8);color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.3)"
+          : `background:${DICE_BADGE_COLORS[k]}`;
+        return `<span class="dice-badge" style="${bg}">${DICE_SHORT[k]}${v}</span>`;
+      })
       .join("");
 
     tr.innerHTML =

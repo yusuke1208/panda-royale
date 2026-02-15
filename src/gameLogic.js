@@ -14,7 +14,7 @@ export const COL_LABEL = {
   green: "緑色",
   blue: "青色",
   pink: "桃色",
-  gold: "金色",
+  rainbow: "虹色",
 };
 export const COL_HEX = {
   yellow: "#ffd43b",
@@ -23,7 +23,7 @@ export const COL_HEX = {
   green: "#8ce99a",
   blue: "#74c0fc",
   pink: "#ff99c8",
-  gold: "#ffd700",
+  rainbow: "#ff6ec7",
 };
 
 // ランダムイベント定義
@@ -82,7 +82,7 @@ export class GameState {
         green: 0,
         blue: 0,
         pink: 0,
-        gold: 0,
+        rainbow: 0,
       },
       history: Array(MAX_ROUNDS).fill("-"),
       rolled: false,
@@ -119,7 +119,7 @@ export class GameState {
         green: 0,
         blue: 0,
         pink: 0,
-        gold: 0,
+        rainbow: 0,
       };
       p.history = Array(MAX_ROUNDS).fill("-");
       p.rolled = p.picked = false;
@@ -162,13 +162,27 @@ export class GameState {
     return arr.filter((o) => o.sc === max).map((o) => o.id);
   }
 
-  /* オファー生成 */
+  /* オファー生成 (期待値に応じた重み付き出現率) */
   generateOffers(topIdsList) {
-    const pool = ["yellow", "purple", "red", "green", "blue", "pink"];
+    // 期待値が低いほど出現しやすい
+    const weighted = [
+      { color: "yellow", w: 30 }, // E=3.5  → 非常に出やすい
+      { color: "blue", w: 20 }, // E=5.0
+      { color: "pink", w: 18 }, // E=6.0
+      { color: "red", w: 15 }, // E=可変(リスキー)
+      { color: "purple", w: 12 }, // E=7.0
+      { color: "green", w: 5 }, // E=10.5 → レア
+    ];
+    const totalW = weighted.reduce((a, b) => a + b.w, 0);
+
     function randomDie() {
-      return Math.random() < 0.03
-        ? "gold"
-        : pool[Math.floor(Math.random() * pool.length)];
+      if (Math.random() < 0.03) return "rainbow"; // 3% 虹
+      let r = Math.random() * totalW;
+      for (const { color, w } of weighted) {
+        r -= w;
+        if (r <= 0) return color;
+      }
+      return "yellow";
     }
     const list3 = [randomDie(), randomDie(), randomDie()];
     const offersMap = {}; // { peerId: [colors] }
@@ -282,13 +296,13 @@ export class GameState {
       );
     }
 
-    // 金
-    if (p.dice.gold) {
-      let pts = 20 * p.dice.gold;
-      if (c2x === "gold") pts *= 2;
+    // 虹
+    if (p.dice.rainbow) {
+      let pts = 20 * p.dice.rainbow;
+      if (c2x === "rainbow") pts *= 2;
       addLine(
-        "gold",
-        `${p.dice.gold}個 × 20 = ${c2x === "gold" ? wrapHL(pts) : pts}点`,
+        "rainbow",
+        `${p.dice.rainbow}個 × 20 = ${c2x === "rainbow" ? wrapHL(pts) : pts}点`,
         pts,
       );
     }
@@ -304,6 +318,13 @@ export class GameState {
 
     // ラウンド完了
     const tops = this.topIds(this.currentRound - 1);
+
+    // ラウンド勝者に黄ダイス+1付与（最終ラウンド以外）
+    if (this.currentRound < MAX_ROUNDS) {
+      for (const id of tops) {
+        this.players[id].dice.yellow++;
+      }
+    }
 
     if (this.currentRound >= MAX_ROUNDS) {
       // ゲーム終了 → 最終ラウンド(R10)の得点で勝者決定
