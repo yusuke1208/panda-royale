@@ -249,8 +249,13 @@ function hostHandleRoll(peerId) {
       hostNet.broadcast("gameEnd", {
         players: roundResult.players,
         winners: roundResult.winners,
+        finalScores: roundResult.finalScores,
       });
-      onGameEnd(roundResult.players, roundResult.winners);
+      onGameEnd(
+        roundResult.players,
+        roundResult.winners,
+        roundResult.finalScores,
+      );
       game.resetGame();
     } else {
       // roundEnd
@@ -282,8 +287,13 @@ function hostHandleRoll(peerId) {
 /* ホスト: リセット */
 function hostResetGame() {
   game.resetGame();
+  game.startGame(); // 再戦時は即座にゲーム開始状態に戻す
+  game.currentEvent = null;
+
+  const state = game.serialize();
   hostNet.broadcast("resetDone", null);
-  hostNet.broadcast("state", game.serialize());
+  hostNet.broadcast("state", state);
+  hostNet.broadcast("roundEvent", null);
 
   // ホスト自身のUI
   onResetDone();
@@ -370,8 +380,8 @@ connectBtn.onclick = async () => {
       onRoundEnd(players, currentRound);
     });
 
-    guestNet.on("gameEnd", ({ players, winners }) => {
-      onGameEnd(players, winners);
+    guestNet.on("gameEnd", ({ players, winners, finalScores }) => {
+      onGameEnd(players, winners, finalScores);
     });
 
     guestNet.on("resetDone", () => {
@@ -433,9 +443,16 @@ rematchBtn.onclick = () => {
 /* ---------- ラウンド表示 ---------- */
 function updateRoundLabel(round) {
   if (round && round <= MAX_ROUNDS) {
-    roundLabel.textContent = `ラウンド ${round} / ${MAX_ROUNDS}`;
+    if (round === MAX_ROUNDS) {
+      roundLabel.textContent = `🔥 最終ラウンド！(このラウンドの得点で勝敗が決まる！)`;
+      roundLabel.style.color = "#d32f2f";
+    } else {
+      roundLabel.textContent = `ラウンド ${round} / ${MAX_ROUNDS}（準備期間）`;
+      roundLabel.style.color = "";
+    }
   } else {
     roundLabel.textContent = "";
+    roundLabel.style.color = "";
   }
 }
 
@@ -509,18 +526,20 @@ function onRoundEnd(players, currentRound) {
 }
 
 /* ---------- ゲーム終了 ---------- */
-function onGameEnd(players, winners) {
+function onGameEnd(players, winners, finalScores) {
   drawPlayers(players);
+  const winScore = finalScores ? Math.max(...Object.values(finalScores)) : "";
   winnerH2.textContent =
     winners.length > 1
-      ? `🏆 同点優勝: ${winners.join(" / ")}`
-      : `🏆 優勝: ${winners[0]}`;
+      ? `🏆 同点優勝: ${winners.join(" / ")} (R10: ${winScore}点)`
+      : `🏆 優勝: ${winners[0]} (R10: ${winScore}点)`;
   winnerH2.classList.remove("hidden");
   rollBtn.classList.add("hidden");
   offersCard.classList.add("hidden");
   rematchBtn.classList.remove("hidden");
   roundLabel.textContent = "";
-  infoP.textContent = "ゲーム終了！「再戦！」で新ゲームを開始できます。";
+  infoP.textContent =
+    "最終ラウンドの得点で勝敗が決まります。「再戦！」で新ゲームを開始できます。";
 }
 
 /* ---------- リセット ---------- */
@@ -588,11 +607,18 @@ function drawPlayers(players) {
     );
     const tr = document.createElement("tr");
 
-    // 各ラウンドのセル（トップスコアにハイライト）
+    // 各ラウンドのセル（トップスコアにハイライト＋最終ラウンド強調）
     const roundCells = p.history
       .map((s, i) => {
         const isTop = typeof s === "number" && s > 0 && s === roundMax[i];
-        return `<td${isTop ? ' class="top-score"' : ""}>${s}</td>`;
+        const isFinal = i === MAX_ROUNDS - 1;
+        const cls = [
+          isTop ? "top-score" : "",
+          isFinal ? "final-round-cell" : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
+        return `<td${cls ? ` class="${cls}"` : ""}>${s}</td>`;
       })
       .join("");
 

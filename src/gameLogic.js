@@ -306,22 +306,24 @@ export class GameState {
     const tops = this.topIds(this.currentRound - 1);
 
     if (this.currentRound >= MAX_ROUNDS) {
-      // ゲーム終了 → 総合得点で勝者決定
-      const totals = Object.entries(this.players).map(([id, p]) => ({
+      // ゲーム終了 → 最終ラウンド(R10)の得点で勝者決定
+      const finalIdx = MAX_ROUNDS - 1;
+      const scores = Object.entries(this.players).map(([id, p]) => ({
         id,
-        total: p.history.reduce(
-          (a, b) => a + (typeof b === "number" ? b : 0),
-          0,
-        ),
+        finalScore:
+          typeof p.history[finalIdx] === "number" ? p.history[finalIdx] : 0,
       }));
-      const maxTotal = Math.max(...totals.map((o) => o.total));
-      const winnerIds = totals
-        .filter((o) => o.total === maxTotal)
+      const maxScore = Math.max(...scores.map((o) => o.finalScore));
+      const winnerIds = scores
+        .filter((o) => o.finalScore === maxScore)
         .map((o) => o.id);
       const winners = winnerIds.map((id) => this.players[id].name);
       return {
         type: "gameEnd",
         winners,
+        finalScores: Object.fromEntries(
+          scores.map((s) => [s.id, s.finalScore]),
+        ),
         players: JSON.parse(JSON.stringify(this.players)),
       };
     }

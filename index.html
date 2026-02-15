@@ -327,6 +327,21 @@
       .rolling {
         animation: shake 0.4s ease-in-out;
       }
+      /* 最終ラウンド列 */
+      .final-round-header {
+        background: #fff3e0 !important;
+        color: #e65100;
+        font-weight: 700;
+      }
+      .final-round-cell {
+        background: #fff8e1 !important;
+        font-weight: 700;
+        font-size: 1.05em;
+      }
+      .final-round-cell.top-score {
+        background: #ffe0b2 !important;
+        color: #e65100;
+      }
 
       /* player list in lobby */
       .player-list {
@@ -527,6 +542,9 @@
         <!-- Scoreboard + Dice Result -->
         <div class="card">
           <h3 style="margin-top: 0">📊 スコアボード</h3>
+          <p style="margin: 0 0 0.5rem; font-size: 0.85rem; color: #868e96">
+            ℹ️ R1～9 は準備期間。最終ラウンド (R10) の得点で勝敗が決まります！
+          </p>
           <div class="table-wrap">
             <table>
               <thead>
@@ -541,7 +559,7 @@
                   <th>7</th>
                   <th>8</th>
                   <th>9</th>
-                  <th>10</th>
+                  <th class="final-round-header">🔥 10</th>
                   <th>合計</th>
                   <th>手持ちダイス</th>
                 </tr>
